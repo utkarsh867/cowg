@@ -1,104 +1,99 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/utkarsh867/cowg"
+	"github.com/utkarsh867/cowg/db"
+	"golang.zx2c4.com/wireguard/wgctrl"
 )
 
+
 type Model struct {
-	choices  []string
-	cursor   int
-	selected map[int]struct{}
+  peerlist tea.Model
+
+  width int
+  height int
 }
 
-func initialModel() Model {
-	return Model{
-		choices:  []string{"Buy carrots", "Buy celery", "Buy kohlrabi"},
-		selected: make(map[int]struct{}),
-	}
+var docStyle = lipgloss.NewStyle().AlignHorizontal(lipgloss.Center)
+
+func createWgClient() *wgctrl.Client {
+  client, err := wgctrl.New()
+  if err != nil {
+    log.Fatal(err)
+  }
+  return client
+}
+
+func initialModel(c *cowg.Cowg) (Model, error) {
+  return Model {
+    peerlist: cowg.NewPeerListModel(c),
+  }, nil
 }
 
 func (m Model) Init() tea.Cmd {
-	// Just return `nil`, which means "no I/O right now, please."
-	return nil
+  return m.peerlist.Init()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+  var cmds []tea.Cmd
 	switch msg := msg.(type) {
-
-	// Is it a key press?
 	case tea.KeyMsg:
-
-		// Cool, what was the actual key pressed?
 		switch msg.String() {
-
-		// These keys should exit the program.
-		case "ctrl+c", "q":
+		case "q":
 			return m, tea.Quit
-
-		// The "up" and "k" keys move the cursor up
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-
-		// The "down" and "j" keys move the cursor down
-		case "down", "j":
-			if m.cursor < len(m.choices)-1 {
-				m.cursor++
-			}
-
-		// The "enter" key and the spacebar (a literal space) toggle
-		// the selected state for the item that the cursor is pointing at.
-		case "enter", " ":
-			_, ok := m.selected[m.cursor]
-			if ok {
-				delete(m.selected, m.cursor)
-			} else {
-				m.selected[m.cursor] = struct{}{}
-			}
 		}
+  case tea.WindowSizeMsg:
+    m.height = msg.Height
+    m.width = msg.Width
 	}
 
-	// Return the updated model to the Bubble Tea runtime for processing.
-	// Note that we're not returning a command.
-	return m, nil
+  var cmd tea.Cmd
+  m.peerlist, cmd = m.peerlist.Update(msg)
+  cmds = append(cmds, cmd)
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) View() string {
-	// The header
-	s := "What should we buy at the market?\n\n"
-
-	// Iterate over our choices
-	for i, choice := range m.choices {
-
-		// Is the cursor pointing at this choice?
-		cursor := " " // no cursor
-		if m.cursor == i {
-			cursor = ">" // cursor!
-		}
-
-		// Is this choice selected?
-		checked := " " // not selected
-		if _, ok := m.selected[i]; ok {
-			checked = "x" // selected!
-		}
-
-		// Render the row
-		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
-	}
-
-	// The footer
-	s += "\nPress q to quit.\n"
-
-	// Send the UI for rendering
-	return s
+  return lipgloss.Place(
+    m.width,
+    m.height,
+    lipgloss.Center,
+    lipgloss.Center,
+    m.peerlist.View(),
+  )
 }
 
 func main() {
-	p := tea.NewProgram(initialModel())
+  wgClient := createWgClient()
+  devices, err := wgClient.Devices()
+  if err != nil {
+    log.Fatalf("Could not connect to db %s", err)
+  }
+  
+  db, err := db.Connect()
+  if err != nil {
+    log.Fatal(err)
+  }
+
+  c := cowg.Cowg{
+    Db: db,
+    WgClient: wgClient,
+    WgDevice: devices[0],
+  }
+
+  model, err := initialModel(&c)
+  if err != nil {
+    log.Print("Error initialModel")
+    log.Print(err)
+  }
+
+	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		os.Exit(1)
 	}

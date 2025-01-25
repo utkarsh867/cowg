@@ -1,1 +1,7 @@
+.idea/
+
 main
+
+*.sql
+*.db
+
