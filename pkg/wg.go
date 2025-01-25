@@ -11,3 +11,4 @@ func PrintDevices(devices []*wgtypes.Device) {
     log.Printf("Device %s of type %s is listening on %d", d.Name, d.Type.String(), d.ListenPort)
   }
 }
+
