@@ -34,6 +34,7 @@ type PeerListModel struct {
 type PeerListItem struct {
   title string
   desc string
+  publicKey string
 }
 
 func (p PeerListItem) Title() string {
@@ -42,6 +43,10 @@ func (p PeerListItem) Title() string {
 
 func (p PeerListItem) Description() string {
   return p.desc
+}
+
+func (p PeerListItem) PublicKey() string {
+  return p.publicKey
 }
 
 func (p PeerListItem) FilterValue() string {
@@ -77,6 +82,7 @@ func GetPeersListItems(c *Cowg) []list.Item {
     listItem := PeerListItem{
       title: title,
       desc: p.AllowedIPs[0].String(),
+      publicKey: p.PublicKey.String(),
     }
     listItems = append(listItems, listItem)
   }
@@ -181,7 +187,7 @@ func (m PeerListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         m.inputFlag = true
         cmds = append(cmds, cmd)
       case key.Matches(msg, m.additionalKeyMap.deletePeer):
-        DeletePeer(m.app, m.list.SelectedItem().(PeerListItem).Title())
+        DeletePeer(m.app, m.list.SelectedItem().(PeerListItem).PublicKey())
         cmd := m.list.SetItems(GetPeersListItems(m.app))
         cmds = append(cmds, cmd)
       }

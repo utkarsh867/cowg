@@ -34,3 +34,9 @@ func (db *DB) AddPeer(p *wgtypes.PeerConfig, peerName string, privateKey string)
     PrivateKey: privateKey,
   })
 }
+
+func (db *DB) DeletePeer(p *wgtypes.PeerConfig) {
+  db.Client.Where(&Peer{
+    PublicKey: p.PublicKey.String(),
+  }).Delete(&Peer{})
+}

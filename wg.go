@@ -47,13 +47,16 @@ func DeletePeer(c *Cowg, peer string) error {
     return err
   }
 
+  peerConfig := wgtypes.PeerConfig {
+    PublicKey: publicKey,
+    Remove: true,
+  }
   c.WgClient.ConfigureDevice(c.WgDevice.Name, wgtypes.Config{
     Peers: []wgtypes.PeerConfig{
-      wgtypes.PeerConfig {
-        PublicKey: publicKey,
-        Remove: true,
-      },
+      peerConfig,
     },
   })
+
+  c.Db.DeletePeer(&peerConfig)
   return nil 
 }
