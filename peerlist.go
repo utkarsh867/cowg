@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	list "github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
@@ -28,7 +29,10 @@ type PeerListModel struct {
   list list.Model
   peerForm *huh.Form
 
+  configView viewport.Model
+
   inputFlag bool
+  configViewFlag bool
 }
 
 type PeerListItem struct {
@@ -56,11 +60,14 @@ func (p PeerListItem) FilterValue() string {
 type PeerListKeyMap struct {
   addPeer key.Binding
   deletePeer key.Binding
+  showConfig key.Binding
 }
 
 func GetPeersListItems(c *Cowg) []list.Item {
   wgDevice, err := c.WgClient.Device(c.WgDevice.Name)
   if err != nil {
+    log.Print("Could not query device")
+    log.Printf("%s", c.WgDevice.Name)
     log.Fatal(err)
   }
   peers :=  wgDevice.Peers
@@ -114,6 +121,10 @@ func NewPeerListModel(c *Cowg) PeerListModel {
         key.WithKeys("x"),
         key.WithHelp("x", "delete peer"),
     ),
+    showConfig: key.NewBinding(
+        key.WithKeys("v"),
+        key.WithHelp("v", "view config"),
+    ),
   }
 
   l := list.New(listItems, list.NewDefaultDelegate(), 0, 0)
@@ -121,6 +132,14 @@ func NewPeerListModel(c *Cowg) PeerListModel {
   l.AdditionalFullHelpKeys = func() []key.Binding {
     return []key.Binding{
       additionalKeyMap.addPeer,
+      additionalKeyMap.deletePeer,
+      additionalKeyMap.showConfig,
+    }
+  }
+  l.AdditionalShortHelpKeys = func() []key.Binding {
+    return []key.Binding{
+      additionalKeyMap.addPeer,
+      additionalKeyMap.deletePeer,
     }
   }
   l.DisableQuitKeybindings()
@@ -135,6 +154,8 @@ func NewPeerListModel(c *Cowg) PeerListModel {
     list: l,
     additionalKeyMap: additionalKeyMap,
     peerForm: nil,
+    inputFlag: false,
+    configViewFlag: false,
   }
 }
 
@@ -149,26 +170,21 @@ func (m PeerListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
   var cmds []tea.Cmd
 
   if m.inputFlag {
-    // switch msg := msg.(type) {
-    // case tea.KeyMsg:
-    //   if msg.String() == "esc" {
-    //     m.inputFlag = false
-    //   }
-    // }
     form, cmd := m.peerForm.Update(msg)
     if f, ok := form.(*huh.Form); ok {
       m.peerForm = f
       cmds = append(cmds, cmd)
     }
-
     if m.peerForm.State == huh.StateAborted {
       m.inputFlag = false
     }
+
     if m.peerForm.State == huh.StateCompleted {
       peerName := m.peerForm.GetString("name")
       ipAddr := net.ParseIP(m.peerForm.GetString("address"))
       err := CreatePeer(m.app, peerName, ipAddr)
       if err != nil {
+        log.Print("Error in creating peer")
         log.Fatal(err)
       }
       m.inputFlag = false
@@ -190,12 +206,17 @@ func (m PeerListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         DeletePeer(m.app, m.list.SelectedItem().(PeerListItem).PublicKey())
         cmd := m.list.SetItems(GetPeersListItems(m.app))
         cmds = append(cmds, cmd)
+      case key.Matches(msg, m.additionalKeyMap.showConfig):
+        s, _ := PeerConfig(m.app, m.list.SelectedItem().(PeerListItem))
+        m.configView.SetContent(s)
+        m.configViewFlag = true
       }
     case tea.WindowSizeMsg:
       h, v := docStyle.GetFrameSize()
       m.list.SetSize(msg.Width-h, msg.Height-v)
+      m.configView = viewport.New(60, msg.Height - v)
+      m.configView.YPosition = 0
     }
-
     var cmd tea.Cmd
     m.list, cmd = m.list.Update(msg)
     cmds = append(cmds, cmd)
@@ -208,6 +229,10 @@ func (m PeerListModel) View() string{
   listString := docStyle.Render(m.list.View())
   if m.inputFlag {
     return m.peerForm.View()
+  }
+
+  if m.configViewFlag {
+    return lipgloss.JoinHorizontal(lipgloss.Center, listString, docStyle.Render(m.configView.View()))
   }
   return listString
 }

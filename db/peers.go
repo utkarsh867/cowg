@@ -40,3 +40,11 @@ func (db *DB) DeletePeer(p *wgtypes.PeerConfig) {
     PublicKey: p.PublicKey.String(),
   }).Delete(&Peer{})
 }
+
+func (db *DB) GetPeer(p *wgtypes.PeerConfig) *Peer {
+  var peer Peer
+  db.Client.Where(&Peer{
+    PublicKey: p.PublicKey.String(),
+  }).Find(&peer)
+  return &peer
+}
