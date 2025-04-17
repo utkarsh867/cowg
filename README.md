@@ -16,3 +16,8 @@ This starts the SSH server on port 22022, and a HTTP server on port 22080.
 
 More details on the usage coming soon!
 
+## Generating a Private Key for the server
+
+```
+docker run --rm -i masipcat/wireguard-go wg genkey
+```
